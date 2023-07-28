@@ -13,6 +13,9 @@ credential: admin.credential.cert(serviceAccount),
 databaseURL: "https://bible-app-f6a3f-default-rtdb.firebaseio.com/"
 });
 
+// initialize FB authentication
+const auth = admin.auth();
+
 // Define routes
 
 app.get("/generate", async (req, res) => {
@@ -53,12 +56,6 @@ app.get("/generate", async (req, res) => {
     }
 });
 
-// start server
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-console.log(`Server is running on port ${port}`);
-});
-
 //verses route
 app.get("/verses", async (req, res) => {
     //retrieving saved veres for specific user from Realtime DB 
@@ -77,3 +74,73 @@ app.get("/verses", async (req, res) => {
 });
 
 
+// sign up route
+app.post("/signup", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await auth.createUser({
+        email: email,
+        password: password,
+    });
+        res.json(user);
+    } catch (error) {
+        console.error("Error creating user:", error);
+        res.status(500).json({ error: "An error occurred while creating a new user." });
+    }
+});
+
+// sign in route
+app.post("/signin", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await auth.signInWithEmailAndPassword(email, password);
+        res.json(user);
+    } catch (error) {
+        console.error("Error signing in:", error);
+        res.status(500).json({ error: "An error occurred while signing in." });
+    }
+});
+
+
+  // sign out route
+app.get("/signout", async (req, res) => {
+    try {
+        await auth.signOut();
+        res.json({ message: "User signed out successfully." });
+    } catch (error) {
+        console.error("Error signing out:", error);
+        res.status(500).json({ error: "An error occurred while signing out." });
+    }
+});
+
+
+// using middleware to verify authentication
+const isAuthenticated = (req, res, next) => {
+    const token = req.header("Authorization");
+    if (!token) {
+        return res.status(401).json({ error: "Unauthorized: Missing token." });
+    }
+
+    admin
+        .auth()
+        .verifyIdToken(token)
+        .then((decodedToken) => {
+        req.user = decodedToken;
+        next();
+    })
+        .catch((error) => {
+        console.error("Error verifying token:", error);
+        res.status(401).json({ error: "Unauthorized: Invalid token." });
+    });
+};
+
+  // Using isAuthenticated middleware for specific routes that require authentication
+app.get("/protected", isAuthenticated, (req, res) => {
+    res.json({ message: "This is a protected route." });
+});
+
+// start server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+console.log(`Server is running on port ${port}`);
+});
